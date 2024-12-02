@@ -1,22 +1,67 @@
 ---
 title: "Solutions"
-output: html_document
+output: github_document
 date: "2024-11-20"
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
+library(modelr)
+library(knitr)
 ```
 
+
 ```{R}
-bwt = read.csv("birthweight.csv") |>
+#PROBLEM 2
+hom_data = read.csv("homicide-data.csv")|>
+  janitor::clean_names()|>
+  mutate(city_state = paste(city, state, sep = ", "))|>
+  filter(city_state != c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO")) |>
+  filter(city_state != "Tulsa, AL") |>
+  filter(victim_race == c("Black", "White")) |>
+  mutate(victim_age = as.integer(victim_age)) |>
+    mutate(victim_sex = as.factor(victim_sex)) |>
+  mutate(victim_race = as.factor(victim_race)) |>
+  mutate(
+    disposition = str_replace(disposition, "Closed by arrest", "Solved"), 
+    disposition = str_replace(disposition, "Closed without arrest", "Unsolved"), 
+    disposition = str_replace(disposition, "Open/No arrest", "Unsolved")
+  )|>
+  mutate(disposition = as.factor(disposition)) |>
+  select(c(city_state, disposition, victim_age, victim_sex, victim_race))
+
+balt_data = hom_data |>
+  filter(city_state == "Baltimore, MD")
+
+
+```
+
+
+
+```{R}
+#PROBLEM 3
+
+#cleaning
+bwtdf = read.csv("birthweight.csv") |>
   mutate( frace = as.factor(frace),
           mrace = as.factor(mrace),
           babysex = as.factor(babysex)
-  )
-str(bwt)
-
-
+  )|>
+  drop_na()
+model <- lm(bwt ~ babysex + fincome + malform + wtgain + ppbmi, data = bwtdf)
+tidy_fit <- model |>
+  broom::tidy()
+kable(tidy_fit, caption = "MLR stats")
+# Adding predictions and residuals to the data
+train_data <- bwtdf |>
+  add_predictions(model) |>
+  add_residuals(model)
+# Plot
+ggplot(train_data, aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "blue") +
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
 ```
 
