@@ -119,7 +119,8 @@ female victim’s.
 bwtdf = read.csv("birthweight.csv") |>
   mutate( frace = as.factor(frace),
           mrace = as.factor(mrace),
-          babysex = as.factor(babysex)
+          babysex = as.factor(babysex),
+          malform = as.factor(malform)
   )|>
   drop_na()
 model <- lm(bwt ~ babysex + fincome + wtgain + ppbmi, data = bwtdf)

@@ -100,7 +100,8 @@ Comment on plot: For most cities, the OR is less than 1 which implies that male 
 bwtdf = read.csv("birthweight.csv") |>
   mutate( frace = as.factor(frace),
           mrace = as.factor(mrace),
-          babysex = as.factor(babysex)
+          babysex = as.factor(babysex),
+          malform = as.factor(malform)
   )|>
   drop_na()
 model <- lm(bwt ~ babysex + fincome + wtgain + ppbmi, data = bwtdf)
