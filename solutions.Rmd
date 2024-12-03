@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(modelr)
 library(knitr)
+library(purrr)
 ```
 
 
@@ -49,7 +50,7 @@ bwtdf = read.csv("birthweight.csv") |>
           babysex = as.factor(babysex)
   )|>
   drop_na()
-model <- lm(bwt ~ babysex + fincome + malform + wtgain + ppbmi, data = bwtdf)
+model <- lm(bwt ~ babysex + fincome + wtgain + ppbmi, data = bwtdf)
 tidy_fit <- model |>
   broom::tidy()
 kable(tidy_fit, caption = "MLR stats")
@@ -65,3 +66,60 @@ ggplot(train_data, aes(x = pred, y = resid)) +
   theme_minimal()
 ```
 
+Compare your model to two others:
+
+One using length at birth and gestational age as predictors (main effects only)
+One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+
+Making two more models:
+
+```{R}
+model1 = lm(bwt ~ blength + gaweeks, data = bwtdf)
+model2 = lm(bwt ~ bhead + blength + babysex + 
+              bhead * blength * babysex, data = bwtdf)
+# Setting seed for reproducibility
+set.seed(123)
+
+# Creating Monte Carlo cross-validation folds
+cv_folds <- crossv_mc(bwtdf, n = 100, test = 0.2) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+
+# Fitting models
+cv_folds <- cv_folds |> 
+  mutate(
+    fit_model = map(train, ~ lm(formula(model), data = .)),
+    fit_model1 = map(train, ~ lm(formula(model1), data = .)),
+    fit_model2 = map(train, ~ lm(formula(model2), data = .))
+  )
+
+# Calculating RMSE for each model
+cv_folds <- cv_folds |> 
+  mutate(
+    rmse_model = map2_dbl(fit_model, test, ~ rmse(model = .x, data = .y)),
+    rmse_model1 = map2_dbl(fit_model1, test, ~ rmse(model = .x, data = .y)),
+    rmse_model2 = map2_dbl(fit_model2, test, ~ rmse(model = .x, data = .y))
+  )
+
+# Reshaping and plotting the results
+cv_folds |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    cols = everything(),
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin() +
+  labs(
+    x = "Model Name",
+    y = "RMSE",
+    title = "Cross-Validation Comparison"
+  )
+
+
+```
