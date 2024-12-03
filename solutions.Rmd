@@ -27,13 +27,13 @@ hom_data = read.csv("homicide-data.csv")|>
     disposition = str_replace(disposition, "Closed without arrest", "Unsolved"), 
     disposition = str_replace(disposition, "Open/No arrest", "Unsolved")
   )|>
-  mutate(disposition_binary = ifelse(disposition == "Solved", 1, 0)) |>
-  select(city_state, disposition_binary, victim_age, victim_sex, victim_race)
+  mutate(disposition_binary = ifelse(disposition == "Solved", 1, 0))
+
 
 balt_data = hom_data |>
-  filter(city_state == "Baltimore, MD") 
+  filter(city_state == "Baltimore, MD") |>
+  select(city_state, disposition_binary, victim_age, victim_sex, victim_race)
 
-# Fit logistic regression model
 glm_fit <- glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = balt_data, family = binomial)
 
 glm_fit |>
@@ -43,12 +43,55 @@ glm_fit |>
          CI_upper = confint(glm_fit)[,2]) |>
   select(term, log_OR = estimate, OR, CI_lower, CI_upper, p.value) |>
   knitr::kable(digits = 3)
+```
 
+For male victims, the odds of solving a homicide case are 0.469 times the odds for female victims in Baltimore.
+
+```{R}
+nested_glm_results <- hom_data |>
+  nest(data = -city_state) |>
+  mutate(
+    models = map(data, \(df) glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = df, family = binomial)), 
+    results = map(models, broom::tidy)) |>
+  unnest(results)
+
+# Calculating confidence intervals for the full model
+conf_int_full_model <- confint.default(glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = hom_data, family = binomial))
+
+nested_glm_results |>
+  select(city_state, term, estimate) |>
+  mutate(term = fct_inorder(term)) |>
+  pivot_wider(names_from = term, values_from = estimate) |>
+  head(8) |>
+  knitr::kable(digits = 4)
+```
+
+```{R}
+# Preparing data for plotting
+plot_data <- nested_glm_results |>
+  filter(term == "victim_sexMale") |>
+  mutate(
+    OR = exp(estimate),
+    conf_low = map_dbl(city_state, ~ exp(confint.default(glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = hom_data %>% filter(city_state == .x), family = binomial))["victim_sexMale", 1])),
+    conf_high = map_dbl(city_state, ~ exp(confint.default(glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = hom_data %>% filter(city_state == .x), family = binomial))["victim_sexMale", 2])),
+    city_state = fct_reorder(city_state, OR)
+  )
+
+# Creating the plot
+ggplot(plot_data, aes(x = OR, y = city_state)) + 
+  geom_point() +
+  geom_errorbar(aes(xmin = conf_low, xmax = conf_high), width = 0.2) +
+  labs(
+    x = "OR (dot) and CI (bar line)",
+    y = "City, State",
+    title = "OR & CI for homicide case outcome based on victim's gender"
+  ) +
+  theme_minimal()
 
 
 ```
 
-
+Comment on plot: For most cities, the OR is less than 1 which implies that male victim’s cases have lower odds of being solved compared to female victim’s.
 
 ```{R}
 #PROBLEM 3
@@ -167,5 +210,5 @@ ggplot(train_data_new, aes(x = pred, y = resid)) +
 
 Plot for model2- Line is not flat and not close to 0 at lower and higher values. We observe that model3 is better from the plots.
 
-Plot for model3 -We observer that apart from the start, the line is flat and close to 0 and the points aren't as scattered away from 0 as in our first plot. This signifies an improvement. However, there are still issues with this model (especially for lower values of the fitted variable).
+Plot for model3 -We observe that apart from the start, the line is flat and close to 0 and the points aren't as scattered away from 0 as in our first plot. This signifies an improvement. However, there are still issues with this model (especially for lower values of the fitted variable).
 
