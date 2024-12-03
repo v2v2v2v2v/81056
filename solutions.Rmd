@@ -22,18 +22,28 @@ hom_data = read.csv("homicide-data.csv")|>
   filter(city_state != "Tulsa, AL") |>
   filter(victim_race == c("Black", "White")) |>
   mutate(victim_age = as.integer(victim_age)) |>
-    mutate(victim_sex = as.factor(victim_sex)) |>
-  mutate(victim_race = as.factor(victim_race)) |>
   mutate(
     disposition = str_replace(disposition, "Closed by arrest", "Solved"), 
     disposition = str_replace(disposition, "Closed without arrest", "Unsolved"), 
     disposition = str_replace(disposition, "Open/No arrest", "Unsolved")
   )|>
-  mutate(disposition = as.factor(disposition)) |>
-  select(c(city_state, disposition, victim_age, victim_sex, victim_race))
+  mutate(disposition_binary = ifelse(disposition == "Solved", 1, 0)) |>
+  select(city_state, disposition_binary, victim_age, victim_sex, victim_race)
 
 balt_data = hom_data |>
-  filter(city_state == "Baltimore, MD")
+  filter(city_state == "Baltimore, MD") 
+
+# Fit logistic regression model
+glm_fit <- glm(disposition_binary ~ victim_age + victim_sex + victim_race, data = balt_data, family = binomial)
+
+glm_fit |>
+  broom::tidy() |>
+  mutate(OR = exp(estimate), 
+         CI_lower = confint(glm_fit)[,1], 
+         CI_upper = confint(glm_fit)[,2]) |>
+  select(term, log_OR = estimate, OR, CI_lower, CI_upper, p.value) |>
+  knitr::kable(digits = 3)
+
 
 
 ```
@@ -67,6 +77,7 @@ ggplot(train_data, aes(x = pred, y = resid)) +
 ```
 Modelling process- I decided to use the variables family income, baby's sex, mother's pre pregnancy BMI and weight gain during pregnancy. Baby's sex is a biological trait which influences weight (boys tend to weigh more). The others were related to the mother's weight and economic conditions. The table we made suggested that all these 4 variables have a statistically significant relationship (very small p values).
 
+About the plot: Our plot indicates that our model is not the best- i.e. our choice of variables for predicting weight and the way we constructed the model could have been better. Ideally, we want the line to be flatter and closer to zero to signify a linear relationship. The line is only close to 0 in the middle. Some of our points are very far from 0 which is not what we want.
 
 Q- Compare your model to two others:
 
@@ -130,3 +141,31 @@ cv_folds |>
 ```
 
 Our third model (using head circumference, length, sex, and all interactions (including the three-way interaction) demonstrates the lowest RMSE, indicating it provides the best fit among the models tested. The second model follows as the next best performer, while the initial model we started with exhibits the highest RMSE and thus the least effective.
+
+We can make plots like we did for our original model to confirm: 
+
+```{R} 
+train_data_ <- bwtdf |>
+  add_predictions(model2) |>
+  add_residuals(model2)
+# Plot
+ggplot(train_data_, aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "lightblue") +
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
+train_data_new <- bwtdf |>
+  add_predictions(model3) |>
+  add_residuals(model3)
+# Plot
+ggplot(train_data_new, aes(x = pred, y = resid)) +
+  geom_point() +
+  geom_smooth(method = "loess", se = FALSE, color = "cyan") +
+  labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
+  theme_minimal()
+```
+
+Plot for model2- Line is not flat and not close to 0 at lower and higher values. We observe that model3 is better from the plots.
+
+Plot for model3 -We observer that apart from the start, the line is flat and close to 0 and the points aren't as scattered away from 0 as in our first plot. This signifies an improvement. However, there are still issues with this model (especially for lower values of the fitted variable).
+
