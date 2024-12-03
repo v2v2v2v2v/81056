@@ -65,18 +65,23 @@ ggplot(train_data, aes(x = pred, y = resid)) +
   labs(title = "Residuals vs Fitted Values", x = "Fitted Values", y = "Residuals") +
   theme_minimal()
 ```
+Modelling process- I decided to use the variables family income, baby's sex, mother's pre pregnancy BMI and weight gain during pregnancy. Baby's sex is a biological trait which influences weight (boys tend to weigh more). The others were related to the mother's weight and economic conditions. The table we made suggested that all these 4 variables have a statistically significant relationship (very small p values).
 
-Compare your model to two others:
+
+Q- Compare your model to two others:
 
 One using length at birth and gestational age as predictors (main effects only)
 One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
 
-Making two more models:
+Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+
+Making two more models and comparing as instructed:
 
 ```{R}
-model1 = lm(bwt ~ blength + gaweeks, data = bwtdf)
-model2 = lm(bwt ~ bhead + blength + babysex + 
-              bhead * blength * babysex, data = bwtdf)
+model2 = lm(bwt ~ blength + gaweeks, data = bwtdf)
+model3 = lm(bwt ~ bhead + blength + babysex + 
+              bhead * blength * babysex + blength * babysex + babysex * bhead
+             + blength * bhead, data = bwtdf)
 # Setting seed for reproducibility
 set.seed(123)
 
@@ -91,16 +96,16 @@ cv_folds <- crossv_mc(bwtdf, n = 100, test = 0.2) |>
 cv_folds <- cv_folds |> 
   mutate(
     fit_model = map(train, ~ lm(formula(model), data = .)),
-    fit_model1 = map(train, ~ lm(formula(model1), data = .)),
-    fit_model2 = map(train, ~ lm(formula(model2), data = .))
+    fit_model2 = map(train, ~ lm(formula(model2), data = .)),
+    fit_model3 = map(train, ~ lm(formula(model3), data = .))
   )
 
 # Calculating RMSE for each model
 cv_folds <- cv_folds |> 
   mutate(
     rmse_model = map2_dbl(fit_model, test, ~ rmse(model = .x, data = .y)),
-    rmse_model1 = map2_dbl(fit_model1, test, ~ rmse(model = .x, data = .y)),
-    rmse_model2 = map2_dbl(fit_model2, test, ~ rmse(model = .x, data = .y))
+    rmse_model2 = map2_dbl(fit_model2, test, ~ rmse(model = .x, data = .y)),
+    rmse_model3 = map2_dbl(fit_model3, test, ~ rmse(model = .x, data = .y))
   )
 
 # Reshaping and plotting the results
@@ -123,3 +128,5 @@ cv_folds |>
 
 
 ```
+
+Our third model (using head circumference, length, sex, and all interactions (including the three-way interaction) demonstrates the lowest RMSE, indicating it provides the best fit among the models tested. The second model follows as the next best performer, while the initial model we started with exhibits the highest RMSE and thus the least effective.
